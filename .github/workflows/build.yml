@@ -9,6 +9,36 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
+    # 1. Ekstrak file ZIP (Karena lo biasanya upload ZIP)
+    - name: Unzip Project
+      run: |
+        ZIP_FILE=$(find . -name "*.zip" | head -n 1)
+        if [ -z "$ZIP_FILE" ]; then
+          echo "Ga ada file zip, lanjut aja kalo udah diekstrak manual."
+        else
+          echo "Ekstrak file: $ZIP_FILE"
+          unzip -o "$ZIP_FILE" -d extracted
+          # Pindahin isi folder extracted ke root
+          cp -r extracted/* .
+          # Bersihin sisa-sisa
+          rm -rf extracted
+          rm "$ZIP_FILE"
+        fi
+
+    # 2. Cari folder project yang bener (kalo isinya ada di dalem subfolder)
+    - name: Cari Project Root
+      id: find
+      run: |
+        GRADLE_FILE=$(find . -name "build.gradle" | head -n 1)
+        if [ -z "$GRADLE_FILE" ]; then
+          echo "Error: build.gradle ga ketemu!"
+          exit 1
+        fi
+        DIR=$(dirname "$GRADLE_FILE")
+        echo "path=$DIR" >> $GITHUB_OUTPUT
+        echo "Project root: $DIR"
+
+    # 3. Set JDK 17
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
@@ -16,8 +46,9 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    # 1. Nulis ulang settings.gradle
+    # 4. Overwrite Config (biar kalo dari Claude ada yang bentrok, di-timpa)
     - name: Overwrite settings.gradle
+      working-directory: ${{ steps.find.outputs.path }}
       run: |
         cat > settings.gradle << 'EOF'
         pluginManagement {
@@ -38,8 +69,8 @@ jobs:
         include ':app'
         EOF
 
-    # 2. Nulis ulang root build.gradle
     - name: Overwrite root build.gradle
+      working-directory: ${{ steps.find.outputs.path }}
       run: |
         cat > build.gradle << 'EOF'
         buildscript {
@@ -68,8 +99,8 @@ jobs:
         }
         EOF
 
-    # 3. Nulis ulang app/build.gradle
     - name: Overwrite app/build.gradle
+      working-directory: ${{ steps.find.outputs.path }}
       run: |
         cat > app/build.gradle << 'EOF'
         plugins {
@@ -128,16 +159,18 @@ jobs:
         }
         EOF
 
-    # 4. Generate debug keystore buat signing
+    # 5. Generate keystore & Build
     - name: Generate debug.keystore
+      working-directory: ${{ steps.find.outputs.path }}
       run: |
         keytool -genkeypair -v -keystore app/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
 
-    # 5. Build APK
     - name: Grant execute permission for gradlew
+      working-directory: ${{ steps.find.outputs.path }}
       run: chmod +x gradlew
 
     - name: Build with Gradle
+      working-directory: ${{ steps.find.outputs.path }}
       run: ./gradlew assembleDebug --stacktrace
 
     # 6. Upload Artifact
@@ -145,4 +178,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: PrivateVault-Debug-APK
-        path: app/build/outputs/apk/debug/app-debug.apk
+        path: ${{ steps.find.outputs.path }}/app/build/outputs/apk/debug/app-debug.apk
