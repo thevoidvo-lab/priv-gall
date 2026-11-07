@@ -34,6 +34,29 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
+    # --- PATCH KODE OTOMATIS DARI WORKFLOW ---
+    - name: Auto-Patch Kotlin Files
+      working-directory: ${{ steps.find.outputs.path }}
+      run: |
+        # 1. Fix GalleryScreen.kt (Tambah OptIn biar ga error experimental)
+        GALLERY_FILE=$(find . -name "GalleryScreen.kt" | head -n 1)
+        if [ -f "$GALLERY_FILE" ]; then
+          # Tambahin @OptIn(ExperimentalMaterial3Api::class) di atas @Composable
+          sed -i 's/@Composable/@OptIn(ExperimentalMaterial3Api::class)\n@Composable/' "$GALLERY_FILE"
+          # Tambahin import-nya
+          sed -i 's/import androidx.compose.material3.MaterialTheme/import androidx.compose.material3.MaterialTheme\nimport androidx.compose.material3.ExperimentalMaterial3Api/' "$GALLERY_FILE"
+        fi
+
+        # 2. Fix ViewerScreen.kt (Tambah import dp)
+        VIEWER_FILE=$(find . -name "ViewerScreen.kt" | head -n 1)
+        if [ -f "$VIEWER_FILE" ]; then
+          # Cek kalo import dp belum ada, tambahin
+          if ! grep -q "import androidx.compose.ui.unit.dp" "$VIEWER_FILE"; then
+            sed -i 's/import androidx.compose.ui.Modifier/import androidx.compose.ui.Modifier\nimport androidx.compose.ui.unit.dp/' "$VIEWER_FILE"
+          fi
+        fi
+    # -----------------------------------------
+
     - name: Overwrite settings.gradle
       working-directory: ${{ steps.find.outputs.path }}
       run: |
@@ -123,10 +146,7 @@ jobs:
             implementation 'androidx.core:core-ktx:1.12.0'
             implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
             implementation 'androidx.activity:activity-compose:1.8.2'
-            
-            // INI YANG BARU GUE TAMBAHIN
             implementation 'androidx.navigation:navigation-compose:2.8.0'
-            
             implementation platform('androidx.compose:compose-bom:2024.09.00')
             implementation 'androidx.compose.ui:ui'
             implementation 'androidx.compose.ui:ui-graphics'
