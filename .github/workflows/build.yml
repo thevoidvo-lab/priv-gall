@@ -9,36 +9,36 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    # 1. Ekstrak file ZIP (Karena lo biasanya upload ZIP)
+    # 1. Unzip
     - name: Unzip Project
       run: |
         ZIP_FILE=$(find . -name "*.zip" | head -n 1)
-        if [ -z "$ZIP_FILE" ]; then
-          echo "Ga ada file zip, lanjut aja kalo udah diekstrak manual."
-        else
+        if [ -n "$ZIP_FILE" ]; then
           echo "Ekstrak file: $ZIP_FILE"
           unzip -o "$ZIP_FILE" -d extracted
-          # Pindahin isi folder extracted ke root
           cp -r extracted/* .
-          # Bersihin sisa-sisa
           rm -rf extracted
           rm "$ZIP_FILE"
         fi
 
-    # 2. Cari folder project yang bener (kalo isinya ada di dalem subfolder)
+    # 2. Cari Folder Project (yang ada folder 'app' dan 'settings.gradle')
     - name: Cari Project Root
       id: find
       run: |
-        GRADLE_FILE=$(find . -name "build.gradle" | head -n 1)
-        if [ -z "$GRADLE_FILE" ]; then
-          echo "Error: build.gradle ga ketemu!"
+        # Cari file settings.gradle, terus ambil folder parent-nya
+        SETTINGS_FILE=$(find . -name "settings.gradle" | head -n 1)
+        if [ -z "$SETTINGS_FILE" ]; then
+          echo "Error: settings.gradle ga ketemu. Cek struktur zip lo."
+          find . -maxdepth 3 -type d
           exit 1
         fi
-        DIR=$(dirname "$GRADLE_FILE")
+        DIR=$(dirname "$SETTINGS_FILE")
         echo "path=$DIR" >> $GITHUB_OUTPUT
-        echo "Project root: $DIR"
+        echo "Project root ditemukan di: $DIR"
+        echo "Isi folder project:"
+        ls -la "$DIR"
 
-    # 3. Set JDK 17
+    # 3. JDK 17
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
@@ -46,7 +46,7 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    # 4. Overwrite Config (biar kalo dari Claude ada yang bentrok, di-timpa)
+    # 4. Overwrite settings.gradle
     - name: Overwrite settings.gradle
       working-directory: ${{ steps.find.outputs.path }}
       run: |
@@ -69,6 +69,7 @@ jobs:
         include ':app'
         EOF
 
+    # 5. Overwrite root build.gradle
     - name: Overwrite root build.gradle
       working-directory: ${{ steps.find.outputs.path }}
       run: |
@@ -99,9 +100,13 @@ jobs:
         }
         EOF
 
-    - name: Overwrite app/build.gradle
+    # 6. Bikin folder 'app' & Overwrite app/build.gradle
+    - name: Setup app folder and build.gradle
       working-directory: ${{ steps.find.outputs.path }}
       run: |
+        # Pastiin folder app ada
+        mkdir -p app
+        
         cat > app/build.gradle << 'EOF'
         plugins {
             id 'com.android.application'
@@ -159,21 +164,25 @@ jobs:
         }
         EOF
 
-    # 5. Generate keystore & Build
+    # 7. Keystore
     - name: Generate debug.keystore
       working-directory: ${{ steps.find.outputs.path }}
       run: |
+        mkdir -p app
         keytool -genkeypair -v -keystore app/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
 
+    # 8. Build
     - name: Grant execute permission for gradlew
       working-directory: ${{ steps.find.outputs.path }}
-      run: chmod +x gradlew
+      run: |
+        if [ -f gradlew ]; then chmod +x gradlew; fi
 
     - name: Build with Gradle
       working-directory: ${{ steps.find.outputs.path }}
-      run: ./gradlew assembleDebug --stacktrace
+      run: |
+        if [ -f gradlew ]; then ./gradlew assembleDebug --stacktrace; else gradle assembleDebug --stacktrace; fi
 
-    # 6. Upload Artifact
+    # 9. Upload
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
