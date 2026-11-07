@@ -57,7 +57,7 @@ jobs:
         include ':app'
         EOF
 
-    # 2. Tulis ulang root build.gradle (PAKE KOTLIN 2.0.21 & PLUGIN COMPOSE BARU)
+    # 2. Tulis ulang root build.gradle (TANPA allprojects)
     - name: Overwrite root build.gradle
       working-directory: ${{ steps.find.outputs.path }}
       run: |
@@ -74,12 +74,6 @@ jobs:
                 classpath 'com.android.tools.build:gradle:8.7.2'
                 classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
                 classpath "org.jetbrains.kotlin:compose-compiler-gradle-plugin:$kotlin_version"
-            }
-        }
-        allprojects {
-            repositories {
-                google()
-                mavenCentral()
             }
         }
         tasks.register('clean', Delete) {
