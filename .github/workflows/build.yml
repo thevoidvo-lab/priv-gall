@@ -84,7 +84,7 @@ jobs:
         tasks.register('clean', Delete) { delete rootProject.layout.buildDirectory }
         EOF
 
-        # Timpa app/build.gradle (Groovy) biar sinkron sama kode Grok
+        # Timpa app/build.gradle (Groovy) + TAMBAH MATERIAL ICONS
         mkdir -p app
         cat > app/build.gradle << 'EOF'
         plugins {
@@ -123,6 +123,7 @@ jobs:
             implementation 'androidx.compose.ui:ui'
             implementation 'androidx.compose.ui:ui-tooling-preview'
             implementation 'androidx.compose.material3:material3'
+            implementation 'androidx.compose.material:material-icons-extended'
             implementation 'androidx.compose.foundation:foundation'
             implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7'
             implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.8.7'
